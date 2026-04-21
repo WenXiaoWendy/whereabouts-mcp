@@ -42,3 +42,11 @@ test("tool host rejects unknown fields", async () => {
     /input.bad is not allowed/
   );
 });
+
+test("tool host does not expose write-side ingest tools", () => {
+  const host = new WhereaboutsToolHost({ service: createService() });
+  assert.equal(
+    host.listTools().some((tool) => tool.name === "whereabouts_ingest_point"),
+    false
+  );
+});

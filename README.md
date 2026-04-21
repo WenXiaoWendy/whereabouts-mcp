@@ -44,10 +44,55 @@ Authorization: Bearer <token>
 GET /healthz
 ```
 
+`POST /location/ingest` accepts a JSON object:
+
+```json
+{
+  "latitude": 22.6,
+  "longitude": 114.0,
+  "timestamp": "2026-04-22T10:30:00+08:00",
+  "capturedAt": "2026-04-22T10:30:00+08:00",
+  "address": "Optional address label",
+  "trigger": "manual",
+  "source": "shortcuts",
+  "deviceName": "iPhone",
+  "shortcutName": "Upload Location",
+  "batteryLevel": 0.82,
+  "notes": "Optional notes"
+}
+```
+
+Required fields:
+
+- `latitude`: number
+- `longitude`: number
+
+Optional fields:
+
+- `timestamp`: ISO datetime for when the sample was captured
+- `capturedAt`: fallback ISO datetime when `timestamp` is not present
+- `address`: human-readable location label
+- `trigger`: event label such as `manual`, `arrive_home`, or `leave_home`
+- `source`: producer label, defaults to `shortcuts`
+- `deviceName`: reporting device name
+- `shortcutName`: iOS Shortcut name
+- `batteryLevel`: number
+- `notes`: free-form notes
+
+Successful response:
+
+```json
+{
+  "ok": true,
+  "id": "stored-point-id",
+  "timestamp": "2026-04-22T02:30:00.000Z",
+  "receivedAt": "2026-04-22T02:30:01.000Z"
+}
+```
+
 ## MCP Tools
 
 - `whereabouts_snapshot`
 - `whereabouts_current_stay`
 - `whereabouts_recent_stays`
 - `whereabouts_recent_moves`
-- `whereabouts_ingest_point`

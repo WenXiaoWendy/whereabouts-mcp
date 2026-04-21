@@ -100,35 +100,6 @@ const PROJECT_TOOLS = [
       };
     },
   },
-  {
-    name: "whereabouts_ingest_point",
-    description: "Append one location sample directly into the store. Useful for manual testing or trusted integrations.",
-    inputSchema: {
-      type: "object",
-      required: ["latitude", "longitude"],
-      properties: {
-        latitude: { type: "number" },
-        longitude: { type: "number" },
-        timestamp: { type: "string" },
-        receivedAt: { type: "string" },
-        address: { type: "string" },
-        trigger: { type: "string" },
-        source: { type: "string" },
-        deviceName: { type: "string" },
-        shortcutName: { type: "string" },
-        batteryLevel: { type: "number" },
-        notes: { type: "string" },
-      },
-      additionalProperties: false,
-    },
-    async handler({ service, args }) {
-      const result = service.appendPoint(args);
-      return {
-        text: `Location sample appended: ${result.point.id}`,
-        data: result,
-      };
-    },
-  },
 ];
 
 function normalizeText(value) {
