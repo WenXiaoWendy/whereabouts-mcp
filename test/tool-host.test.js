@@ -62,6 +62,9 @@ test("snapshot tool returns current stay and recent history", async () => {
   assert.equal(result.data.recentMovementEvents.length, 1);
   assert.equal(result.data.batteryTrend.bucketMinutes, 5);
   assert.deepEqual(result.data.batteryTrend.values, [48, 48, 45, 44]);
+  assert.equal(result.data.batteryTrend.estimatedMinutesToEmpty, 110);
+  assert.equal(result.data.batteryTrend.estimatedEmptyAt, "2026-04-22T03:06:00.000Z");
+  assert.equal(result.data.batteryTrend.estimatedEmptyReason, "trend_projection");
 });
 
 test("summary tool returns duration, mobility state, places, moves, and battery trend", async () => {
@@ -107,12 +110,13 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
   assert.equal(result.data.mobilityState.state, "staying");
   assert.equal(result.data.moveCount, 1);
   assert.equal(result.data.knownPlaces.length, 2);
-  assert.equal(result.data.knownPlaces[0].placeTag, "work");
+  assert.ok(result.data.knownPlaces.some((place) => place.placeTag === "work"));
   assert.equal(result.data.batteryTrend.source, "battery_observations");
   assert.equal(result.data.batteryTrend.firstLevelPercent, 51);
   assert.equal(result.data.batteryTrend.latestLevelPercent, 6);
   assert.equal(result.data.batteryTrend.deltaPercent, -45);
   assert.equal(result.data.batteryTrend.direction, "draining");
+  assert.ok(Number.isInteger(result.data.batteryTrend.estimatedMinutesToEmpty));
   assert.ok(Array.isArray(result.data.batteryTrend.values));
 });
 

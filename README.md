@@ -161,6 +161,9 @@ are available.
   "deltaPercent": -6,
   "deltaPerHourPercent": -24,
   "direction": "draining",
+  "estimatedMinutesToEmpty": 110,
+  "estimatedEmptyAtLocal": "2026-04-22 11:06:00",
+  "estimatedEmptyReason": "trend_projection",
   "fillStrategy": "latest_observation_per_bucket_then_carry_forward"
 }
 ```

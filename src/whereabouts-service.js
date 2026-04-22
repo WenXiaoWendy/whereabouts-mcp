@@ -374,6 +374,12 @@ function buildBatteryTrendFromRecords(records, displayTimeZone, source, options 
   const deltaPerHourPercent = deltaPercent != null && durationHours > 0
     ? Math.round((deltaPercent / durationHours) * 10) / 10
     : 0;
+  const depletionEstimate = buildBatteryDepletionEstimate({
+    latestPercent: last.percent,
+    latestTimestamp: last.timestamp,
+    deltaPerHourPercent,
+    displayTimeZone,
+  });
   return {
     source,
     sampleCount: records.length,
@@ -388,9 +394,51 @@ function buildBatteryTrendFromRecords(records, displayTimeZone, source, options 
     deltaPercent,
     deltaPerHourPercent,
     direction: inferBatteryDirection(deltaPercent),
+    ...depletionEstimate,
     minLevelPercent: percents.length ? Math.min(...percents) : null,
     maxLevelPercent: percents.length ? Math.max(...percents) : null,
     fillStrategy: "latest_observation_per_bucket_then_carry_forward",
+  };
+}
+
+function buildBatteryDepletionEstimate({
+  latestPercent,
+  latestTimestamp,
+  deltaPerHourPercent,
+  displayTimeZone,
+}) {
+  if (!Number.isFinite(latestPercent) || latestPercent <= 0) {
+    return {
+      estimatedMinutesToEmpty: 0,
+      estimatedEmptyAt: latestTimestamp || "",
+      estimatedEmptyAtLocal: formatDisplayTime(latestTimestamp, displayTimeZone),
+      estimatedEmptyReason: "battery_already_empty",
+    };
+  }
+  if (!Number.isFinite(deltaPerHourPercent) || deltaPerHourPercent >= 0) {
+    return {
+      estimatedMinutesToEmpty: null,
+      estimatedEmptyAt: null,
+      estimatedEmptyAtLocal: null,
+      estimatedEmptyReason: "not_discharging",
+    };
+  }
+  const latestMs = Date.parse(latestTimestamp || "");
+  if (!Number.isFinite(latestMs)) {
+    return {
+      estimatedMinutesToEmpty: null,
+      estimatedEmptyAt: null,
+      estimatedEmptyAtLocal: null,
+      estimatedEmptyReason: "missing_latest_timestamp",
+    };
+  }
+  const minutesToEmpty = Math.round((latestPercent / Math.abs(deltaPerHourPercent)) * 60);
+  const estimatedEmptyAt = new Date(latestMs + minutesToEmpty * 60000).toISOString();
+  return {
+    estimatedMinutesToEmpty: minutesToEmpty,
+    estimatedEmptyAt,
+    estimatedEmptyAtLocal: formatDisplayTime(estimatedEmptyAt, displayTimeZone),
+    estimatedEmptyReason: "trend_projection",
   };
 }
 
