@@ -37,6 +37,11 @@ async function main() {
     return;
   }
 
+  if (command === "summary") {
+    runSummaryCommand(service, process.argv.slice(3));
+    return;
+  }
+
   if (command === "tool-mcp-server") {
     const toolHost = new WhereaboutsToolHost({ service });
     runWhereaboutsMcpServer({ toolHost });
@@ -130,6 +135,29 @@ function runMovesCommand(service, args) {
   }
 }
 
+function runSummaryCommand(service, args) {
+  const options = parseSummaryArgs(args);
+  const summary = service.getSummary({ range: options.range });
+  if (options.json) {
+    console.log(JSON.stringify(summary, null, 2));
+    return;
+  }
+  console.log(`${summary.range} summary (${summary.rangeStartAtLocal} -> ${summary.rangeEndAtLocal})`);
+  console.log(`state: ${summary.mobilityState.state}`);
+  console.log(`stays: ${summary.stayCount}`);
+  console.log(`moves: ${summary.moveCount}`);
+  console.log(`known duration: ${summary.totalKnownStayDurationText}`);
+  if (summary.knownPlaces.length) {
+    console.log("places:");
+    for (const place of summary.knownPlaces) {
+      console.log(`- ${place.placeLabel || place.placeId || place.address || "unknown"}: ${place.durationText}`);
+    }
+  }
+  if (summary.batteryTrend.sampleCount) {
+    console.log(`battery: ${summary.batteryTrend.firstLevelPercent}% -> ${summary.batteryTrend.latestLevelPercent}%`);
+  }
+}
+
 function parseServeArgs(args, config) {
   const options = {
     help: false,
@@ -201,6 +229,31 @@ function parseHistoryArgs(args) {
   return options;
 }
 
+function parseSummaryArgs(args) {
+  const options = { json: false, range: "day" };
+  for (let index = 0; index < args.length; index += 1) {
+    const token = String(args[index] || "").trim();
+    if (!token) {
+      continue;
+    }
+    if (token === "--json") {
+      options.json = true;
+      continue;
+    }
+    if (token === "--range") {
+      const value = String(args[index + 1] || "").trim().toLowerCase();
+      if (!["day", "week", "month"].includes(value)) {
+        throw new Error("summary requires --range day|week|month");
+      }
+      options.range = value;
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unknown argument: ${token}`);
+  }
+  return options;
+}
+
 function printHelp(config) {
   console.log([
     "whereabouts-mcp <command>",
@@ -210,6 +263,7 @@ function printHelp(config) {
     "  latest           Print the current stay",
     "  history          Print recent closed stays",
     "  moves            Print recent major movement events",
+    "  summary          Print a day/week/month summary",
     "  tool-mcp-server  Run the stdio MCP server",
     "",
     `Defaults: host=${config.host} port=${config.port}`,
@@ -225,6 +279,7 @@ function printServeHelp(config) {
     "  WHEREABOUTS_HOST",
     "  WHEREABOUTS_PORT",
     "  WHEREABOUTS_TOKEN",
+    "  WHEREABOUTS_SAMPLE_LIMIT",
     "  WHEREABOUTS_STAY_MERGE_RADIUS_METERS",
     "  WHEREABOUTS_STAY_BREAK_RADIUS_METERS",
     "  WHEREABOUTS_STAY_BREAK_SAMPLES",
@@ -257,4 +312,5 @@ module.exports = {
   parseHistoryArgs,
   parseJsonOnlyArgs,
   parseServeArgs,
+  parseSummaryArgs,
 };

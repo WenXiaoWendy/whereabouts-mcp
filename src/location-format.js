@@ -4,8 +4,15 @@ function printLocationRecord(record, displayTimeZone = resolveDisplayTimeZone())
   const latitude = record.centerLat ?? record.latitude;
   const longitude = record.centerLng ?? record.longitude;
   console.log(`${formatDisplayTime(start, displayTimeZone)} -> ${formatDisplayTime(end, displayTimeZone)}  ${latitude}, ${longitude}`);
+  const durationText = formatDuration(computeRecordDurationMs(record));
+  if (durationText) {
+    console.log(`duration: ${durationText}`);
+  }
   if (record.address) {
     console.log(`address: ${record.address}`);
+  }
+  if (record.placeLabel || record.placeId) {
+    console.log(`place: ${record.placeLabel || record.placeId}`);
   }
   if (record.sampleCount != null) {
     console.log(`samples: ${record.sampleCount}`);
@@ -44,6 +51,12 @@ function serializeLocationRecordForOutput(record, displayTimeZone = resolveDispl
     ...record,
     displayTimeZone,
   };
+  const durationMs = computeRecordDurationMs(record);
+  if (durationMs != null) {
+    output.durationMs = durationMs;
+    output.durationMinutes = Math.round(durationMs / 60000);
+    output.durationText = formatDuration(durationMs);
+  }
   for (const key of ["enteredAt", "lastSeenAt", "leftAt", "timestamp", "receivedAt", "movedAt"]) {
     const localKey = `${key}Local`;
     const localValue = formatDisplayTime(record?.[key], displayTimeZone);
@@ -52,6 +65,39 @@ function serializeLocationRecordForOutput(record, displayTimeZone = resolveDispl
     }
   }
   return output;
+}
+
+function computeRecordDurationMs(record) {
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+  const start = Date.parse(record.enteredAt || record.timestamp || "");
+  const end = Date.parse(record.leftAt || record.lastSeenAt || record.receivedAt || "");
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return null;
+  }
+  return end - start;
+}
+
+function formatDuration(durationMs) {
+  if (!Number.isFinite(durationMs) || durationMs < 0) {
+    return "";
+  }
+  const totalMinutes = Math.round(durationMs / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts = [];
+  if (days) {
+    parts.push(`${days}d`);
+  }
+  if (hours) {
+    parts.push(`${hours}h`);
+  }
+  if (minutes || !parts.length) {
+    parts.push(`${minutes}m`);
+  }
+  return parts.join(" ");
 }
 
 function serializeLocationHistoryForOutput(currentStay, recentStays, displayTimeZone = resolveDisplayTimeZone()) {
@@ -116,8 +162,10 @@ function resolveDisplayTimeZone() {
 }
 
 module.exports = {
+  computeRecordDurationMs,
   formatCoordinatePair,
   formatDisplayTime,
+  formatDuration,
   printLocationRecord,
   printMovementRecord,
   resolveDisplayTimeZone,

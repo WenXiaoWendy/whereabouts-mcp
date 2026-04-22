@@ -100,6 +100,28 @@ const PROJECT_TOOLS = [
       };
     },
   },
+  {
+    name: "whereabouts_summary",
+    description: "Return a day, week, or month summary with stay duration, movement count, battery trend, and mobility state.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        range: {
+          type: "string",
+          enum: ["day", "week", "month"],
+          description: "Summary range: day, week, or month. Defaults to day.",
+        },
+      },
+      additionalProperties: false,
+    },
+    async handler({ service, args }) {
+      const result = service.getSummary(args);
+      return {
+        text: `Whereabouts ${result.range} summary loaded: ${result.stayCount} stays, ${result.moveCount} moves.`,
+        data: result,
+      };
+    },
+  },
 ];
 
 function normalizeText(value) {
@@ -197,6 +219,9 @@ function validateSchema(schema, value, toolName, path) {
   }
   if (schemaType === "number" && (typeof value !== "number" || !Number.isFinite(value))) {
     throw new Error(`${toolName} ${path} must be a number.`);
+  }
+  if (Array.isArray(schema.enum) && !schema.enum.includes(value)) {
+    throw new Error(`${toolName} ${path} must be one of: ${schema.enum.join(", ")}.`);
   }
 }
 

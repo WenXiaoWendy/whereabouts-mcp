@@ -36,6 +36,8 @@ test("location json output includes localized time fields", () => {
     assert.equal(output.displayTimeZone, "Asia/Shanghai");
     assert.equal(output.enteredAtLocal, "2026-04-18 23:37:49");
     assert.equal(output.lastSeenAtLocal, "2026-04-19 00:28:06");
+    assert.equal(output.durationMinutes, 50);
+    assert.equal(output.durationText, "50m");
   } finally {
     if (previousTz == null) {
       delete process.env.TZ;

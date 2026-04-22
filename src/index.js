@@ -6,8 +6,10 @@ const {
   startLocationIngestServer,
 } = require("./location-ingest-server");
 const {
+  computeRecordDurationMs,
   formatCoordinatePair,
   formatDisplayTime,
+  formatDuration,
   printLocationRecord,
   printMovementRecord,
   resolveDisplayTimeZone,
@@ -20,10 +22,12 @@ const { WhereaboutsToolHost } = require("./tool-host");
 const { runWhereaboutsMcpServer } = require("./mcp-stdio-server");
 
 module.exports = {
+  computeRecordDurationMs,
   computeDistanceMeters,
   createLocationIngestServer,
   formatCoordinatePair,
   formatDisplayTime,
+  formatDuration,
   ingestLocationPayload,
   LocationStore,
   normalizeLocationPoint,

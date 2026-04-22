@@ -17,6 +17,7 @@ whereabouts-mcp serve
 whereabouts-mcp latest --json
 whereabouts-mcp history --limit 20 --json
 whereabouts-mcp moves --limit 20 --json
+whereabouts-mcp summary --range day --json
 whereabouts-mcp tool-mcp-server
 ```
 
@@ -30,6 +31,7 @@ WHEREABOUTS_PORT
 WHEREABOUTS_TOKEN
 WHEREABOUTS_HISTORY_LIMIT
 WHEREABOUTS_MOVEMENT_EVENT_LIMIT
+WHEREABOUTS_SAMPLE_LIMIT
 WHEREABOUTS_STAY_MERGE_RADIUS_METERS
 WHEREABOUTS_STAY_BREAK_RADIUS_METERS
 WHEREABOUTS_STAY_BREAK_SAMPLES
@@ -57,6 +59,8 @@ GET /healthz
   "source": "shortcuts",
   "deviceName": "iPhone",
   "shortcutName": "Upload Location",
+  "placeId": "home",
+  "placeLabel": "Home",
   "batteryLevel": 0.82,
   "notes": "Optional notes"
 }
@@ -76,6 +80,8 @@ Optional fields:
 - `source`: producer label, defaults to `shortcuts`
 - `deviceName`: reporting device name
 - `shortcutName`: iOS Shortcut name
+- `placeId`: stable normalized place id such as `home` or `work`
+- `placeLabel`: human-friendly normalized place label
 - `batteryLevel`: number
 - `notes`: free-form notes
 
@@ -96,3 +102,20 @@ Successful response:
 - `whereabouts_current_stay`
 - `whereabouts_recent_stays`
 - `whereabouts_recent_moves`
+- `whereabouts_summary`
+
+`whereabouts_current_stay`, `whereabouts_recent_stays`, and `whereabouts_snapshot`
+include `durationMs`, `durationMinutes`, and `durationText` for stay records.
+
+`whereabouts_summary` accepts:
+
+```json
+{
+  "range": "day"
+}
+```
+
+`range` can be `day`, `week`, or `month`. The summary is calendar-based in the
+display timezone and includes current mobility state, stay duration, known
+places, movement counts, and battery trend when retained raw samples are
+available.

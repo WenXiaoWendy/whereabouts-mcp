@@ -13,6 +13,7 @@ function readConfig(argv = process.argv.slice(2)) {
     token: readTextEnv("WHEREABOUTS_TOKEN"),
     historyLimit: readIntEnv("WHEREABOUTS_HISTORY_LIMIT") || 1000,
     movementEventLimit: readIntEnv("WHEREABOUTS_MOVEMENT_EVENT_LIMIT"),
+    sampleLimit: readIntEnv("WHEREABOUTS_SAMPLE_LIMIT"),
     stayMergeRadiusMeters: readIntEnv("WHEREABOUTS_STAY_MERGE_RADIUS_METERS") || 50,
     stayBreakConfirmRadiusMeters: readIntEnv("WHEREABOUTS_STAY_BREAK_RADIUS_METERS") || 200,
     stayBreakConfirmSamples: readIntEnv("WHEREABOUTS_STAY_BREAK_SAMPLES") || 2,

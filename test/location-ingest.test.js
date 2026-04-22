@@ -45,6 +45,49 @@ test("location ingest accepts authorized shortcut payloads", () => {
   assert.equal(store.getLatest().address, "Shenzhen");
 });
 
+test("location store keeps raw samples and normalized place labels", () => {
+  const filePath = createTempStore();
+  const store = new LocationStore({ filePath, historyLimit: 10, sampleLimit: 2 });
+
+  store.append({
+    latitude: 22.5,
+    longitude: 113.9,
+    timestamp: "2026-04-22T01:00:00.000Z",
+    placeId: "home",
+    placeLabel: "Home",
+    batteryLevel: 51,
+  });
+  store.append({
+    latitude: 22.5001,
+    longitude: 113.9001,
+    timestamp: "2026-04-22T02:00:00.000Z",
+    placeId: "home",
+    placeLabel: "Home",
+    batteryLevel: 6,
+  });
+
+  const latest = store.getLatest();
+  const samples = store.listRecentSamples(10);
+  assert.equal(latest.placeId, "home");
+  assert.equal(latest.placeLabel, "Home");
+  assert.equal(latest.batteryLevel, 6);
+  assert.equal(samples.length, 2);
+  assert.equal(samples[0].batteryLevel, 6);
+  assert.equal(samples[1].batteryLevel, 51);
+});
+
+test("location store exposes pending break as in-transit input", () => {
+  const filePath = createTempStore();
+  const store = new LocationStore({ filePath, historyLimit: 10 });
+
+  store.append({ latitude: 22.6, longitude: 114.0, address: "Home" });
+  store.append({ latitude: 22.61, longitude: 114.01, address: "Road" });
+
+  const pendingBreak = store.getPendingBreak();
+  assert.ok(pendingBreak);
+  assert.equal(pendingBreak.address, "Road");
+});
+
 test("location store omits empty and debug-only fields", () => {
   const filePath = createTempStore();
   const store = new LocationStore({ filePath, historyLimit: 10 });
