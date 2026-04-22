@@ -34,6 +34,7 @@ const PROJECT_TOOLS = [
       properties: {
         stayLimit: { type: "integer", description: "Optional number of recent stays to include." },
         moveLimit: { type: "integer", description: "Optional number of recent moves to include." },
+        batteryBucketMinutes: { type: "integer", description: "Optional battery trend bucket size in minutes." },
       },
       additionalProperties: false,
     },
@@ -111,6 +112,7 @@ const PROJECT_TOOLS = [
           enum: ["day", "week", "month"],
           description: "Summary range: day, week, or month. Defaults to day.",
         },
+        batteryBucketMinutes: { type: "integer", description: "Optional battery trend bucket size in minutes." },
       },
       additionalProperties: false,
     },

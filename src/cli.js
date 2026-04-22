@@ -154,7 +154,7 @@ function runSummaryCommand(service, args) {
     }
   }
   if (summary.batteryTrend.sampleCount) {
-    console.log(`battery: ${summary.batteryTrend.firstLevelPercent}% -> ${summary.batteryTrend.latestLevelPercent}%`);
+    console.log(`battery: ${summary.batteryTrend.firstLevelPercent}% -> ${summary.batteryTrend.latestLevelPercent}% (${summary.batteryTrend.direction})`);
   }
 }
 

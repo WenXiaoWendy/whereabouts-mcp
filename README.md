@@ -142,5 +142,30 @@ the raw `locations.json` store.
 
 `range` can be `day`, `week`, or `month`. The summary is calendar-based in the
 display timezone and includes current mobility state, stay duration, known
-places, movement counts, and battery trend when retained raw samples are
-available.
+places, movement counts, and battery trend when retained battery observations
+are available.
+
+`whereabouts_snapshot` and `whereabouts_summary` include a compact
+`batteryTrend`:
+
+```json
+{
+  "source": "battery_observations",
+  "sampleCount": 4,
+  "firstLevelPercent": 50,
+  "latestLevelPercent": 44,
+  "bucketMinutes": 5,
+  "seriesStartAtLocal": "2026-04-22 09:00:00",
+  "seriesEndAtLocal": "2026-04-22 09:15:00",
+  "values": [48, 48, 45, 44],
+  "deltaPercent": -6,
+  "deltaPerHourPercent": -24,
+  "direction": "draining",
+  "fillStrategy": "latest_observation_per_bucket_then_carry_forward"
+}
+```
+
+If several reports land in the same bucket, the latest report in that bucket
+wins. Empty buckets are filled with the previous known battery value. Raw
+`batteryObservations` stay in storage only, capped at 100 newest-first entries
+by default.

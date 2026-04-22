@@ -28,7 +28,7 @@ class LocationStore {
       movementEventLimit,
       Math.min(this.historyLimit, 100)
     );
-    this.batteryHistoryLimit = normalizePositiveInt(batteryHistoryLimit, this.historyLimit);
+    this.batteryHistoryLimit = normalizePositiveInt(batteryHistoryLimit, 100);
     this.knownPlaceRadiusMeters = normalizePositiveInt(knownPlaceRadiusMeters, 150);
     this.knownPlaces = normalizeKnownPlaces(knownPlaces, this.knownPlaceRadiusMeters);
     this.state = createEmptyState();
@@ -94,7 +94,7 @@ class LocationStore {
   listRecentBatteryObservations(limit = 100) {
     this.load();
     const normalizedLimit = normalizePositiveInt(limit, 100);
-    return this.state.batteryObservations.slice(-normalizedLimit).reverse().map((observation) => ({ ...observation }));
+    return this.state.batteryObservations.slice(0, normalizedLimit).map((observation) => ({ ...observation }));
   }
 
   getPendingBreak() {
@@ -515,7 +515,8 @@ function appendBatteryObservation(state, point, limit) {
     timestamp: point.timestamp,
     batteryLevel: point.batteryLevel,
   });
-  state.batteryObservations = state.batteryObservations.slice(-limit);
+  state.batteryObservations.sort((left, right) => compareIsoTime(right.timestamp, left.timestamp));
+  state.batteryObservations = state.batteryObservations.slice(0, limit);
 }
 
 function normalizeBatteryObservationArray(values, limit) {
@@ -525,7 +526,8 @@ function normalizeBatteryObservationArray(values, limit) {
   return values
     .map(normalizeBatteryObservation)
     .filter(Boolean)
-    .slice(-limit);
+    .sort((left, right) => compareIsoTime(right.timestamp, left.timestamp))
+    .slice(0, limit);
 }
 
 function normalizeBatteryObservation(value) {

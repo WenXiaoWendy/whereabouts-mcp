@@ -77,6 +77,25 @@ test("location store keeps battery observations and tags known places by coordin
   assert.equal(observations[1].batteryLevel, 51);
 });
 
+test("location store keeps at most 100 battery observations newest-first by default", () => {
+  const filePath = createTempStore();
+  const store = new LocationStore({ filePath, historyLimit: 200 });
+
+  for (let index = 0; index < 101; index += 1) {
+    store.append({
+      latitude: 22.5,
+      longitude: 113.9,
+      timestamp: new Date(Date.UTC(2026, 3, 22, 0, index, 0)).toISOString(),
+      batteryLevel: index,
+    });
+  }
+
+  const observations = store.listRecentBatteryObservations(200);
+  assert.equal(observations.length, 100);
+  assert.equal(observations[0].batteryLevel, 100);
+  assert.equal(observations[99].batteryLevel, 1);
+});
+
 test("location store exposes pending break as in-transit input", () => {
   const filePath = createTempStore();
   const store = new LocationStore({ filePath, historyLimit: 10 });

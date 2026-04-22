@@ -20,18 +20,48 @@ function isoAgo(hours) {
 
 test("snapshot tool returns current stay and recent history", async () => {
   const service = createService();
-  service.appendPoint({ latitude: 22.6, longitude: 114.0, address: "Home" });
-  service.appendPoint({ latitude: 22.6001, longitude: 114.0001, address: "Home" });
-  service.appendPoint({ latitude: 22.61, longitude: 114.01, address: "Office" });
-  service.appendPoint({ latitude: 22.6101, longitude: 114.0101, address: "Office" });
+  service.appendPoint({
+    latitude: 22.6,
+    longitude: 114.0,
+    timestamp: "2026-04-22T01:01:00.000Z",
+    address: "Home",
+    batteryLevel: 50,
+  });
+  service.appendPoint({
+    latitude: 22.6001,
+    longitude: 114.0001,
+    timestamp: "2026-04-22T01:04:00.000Z",
+    address: "Home",
+    batteryLevel: 48,
+  });
+  service.appendPoint({
+    latitude: 22.61,
+    longitude: 114.01,
+    timestamp: "2026-04-22T01:11:00.000Z",
+    address: "Office",
+    batteryLevel: 45,
+  });
+  service.appendPoint({
+    latitude: 22.6101,
+    longitude: 114.0101,
+    timestamp: "2026-04-22T01:16:00.000Z",
+    address: "Office",
+    batteryLevel: 44,
+  });
 
   const host = new WhereaboutsToolHost({ service });
-  const result = await host.invokeTool("whereabouts_snapshot", { stayLimit: 5, moveLimit: 5 });
+  const result = await host.invokeTool("whereabouts_snapshot", {
+    stayLimit: 5,
+    moveLimit: 5,
+    batteryBucketMinutes: 5,
+  });
 
   assert.equal(result.data.currentStay.address, "Office");
   assert.ok("durationMs" in result.data.currentStay);
   assert.equal(result.data.recentStays.length, 1);
   assert.equal(result.data.recentMovementEvents.length, 1);
+  assert.equal(result.data.batteryTrend.bucketMinutes, 5);
+  assert.deepEqual(result.data.batteryTrend.values, [48, 48, 45, 44]);
 });
 
 test("summary tool returns duration, mobility state, places, moves, and battery trend", async () => {
@@ -82,6 +112,8 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
   assert.equal(result.data.batteryTrend.firstLevelPercent, 51);
   assert.equal(result.data.batteryTrend.latestLevelPercent, 6);
   assert.equal(result.data.batteryTrend.deltaPercent, -45);
+  assert.equal(result.data.batteryTrend.direction, "draining");
+  assert.ok(Array.isArray(result.data.batteryTrend.values));
 });
 
 test("current stay tool returns empty state when no data exists", async () => {

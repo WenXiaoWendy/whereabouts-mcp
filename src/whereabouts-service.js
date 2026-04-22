@@ -48,14 +48,21 @@ class WhereaboutsService {
     return this.store.listRecentBatteryObservations(limit);
   }
 
-  getSnapshot({ stayLimit = 5, moveLimit = 5 } = {}) {
+  getSnapshot({ stayLimit = 5, moveLimit = 5, batteryBucketMinutes } = {}) {
+    const displayTimeZone = resolveDisplayTimeZone();
     const currentStay = this.getCurrentStay();
     const recentStays = this.listRecentStays({ limit: stayLimit });
     const recentMovementEvents = this.listRecentMovementEvents({ limit: moveLimit });
+    const recentBatteryObservations = this.listRecentBatteryObservations({
+      limit: this.config.batteryHistoryLimit || 100,
+    });
     return {
-      currentStay: currentStay ? serializeLocationRecordForOutput(currentStay) : null,
-      recentStays: recentStays.map((record) => serializeLocationRecordForOutput(record)),
-      recentMovementEvents: recentMovementEvents.map((record) => serializeLocationRecordForOutput(record)),
+      currentStay: currentStay ? serializeLocationRecordForOutput(currentStay, displayTimeZone) : null,
+      recentStays: recentStays.map((record) => serializeLocationRecordForOutput(record, displayTimeZone)),
+      recentMovementEvents: recentMovementEvents.map((record) => serializeLocationRecordForOutput(record, displayTimeZone)),
+      batteryTrend: buildBatteryTrend(recentBatteryObservations, [], displayTimeZone, {
+        bucketMinutes: batteryBucketMinutes,
+      }),
     };
   }
 
@@ -78,7 +85,7 @@ class WhereaboutsService {
     );
   }
 
-  getSummary({ range = "day" } = {}) {
+  getSummary({ range = "day", batteryBucketMinutes } = {}) {
     const displayTimeZone = resolveDisplayTimeZone();
     const normalizedRange = normalizeSummaryRange(range);
     const now = new Date();
@@ -136,7 +143,9 @@ class WhereaboutsService {
         ? Math.max(...movesInRange.map((event) => event.distanceMeters || 0))
         : 0,
       lastMove: movesInRange[0] ? serializeLocationRecordForOutput(movesInRange[0], displayTimeZone) : null,
-      batteryTrend: buildBatteryTrend(batteryObservationsInRange, staysInRange, displayTimeZone),
+      batteryTrend: buildBatteryTrend(batteryObservationsInRange, staysInRange, displayTimeZone, {
+        bucketMinutes: batteryBucketMinutes,
+      }),
       dataCoverage: {
         batteryObservationCount: batteryObservationsInRange.length,
         stayCount: staysInRange.length,
@@ -318,7 +327,7 @@ function buildPlaceKey(stay) {
   return "unknown";
 }
 
-function buildBatteryTrend(observations, stays, displayTimeZone) {
+function buildBatteryTrend(observations, stays, displayTimeZone, options = {}) {
   const batteryRecords = observations
     .filter((observation) => Number.isFinite(observation.batteryLevel))
     .map((observation) => ({
@@ -336,16 +345,17 @@ function buildBatteryTrend(observations, stays, displayTimeZone) {
         timestamp: stay.lastSeenAt,
       }))
       .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
-    return buildBatteryTrendFromRecords(stayRecords, displayTimeZone, "aggregated_stays");
+    return buildBatteryTrendFromRecords(stayRecords, displayTimeZone, "aggregated_stays", options);
   }
-  return buildBatteryTrendFromRecords(batteryRecords, displayTimeZone, "battery_observations");
+  return buildBatteryTrendFromRecords(batteryRecords, displayTimeZone, "battery_observations", options);
 }
 
-function buildBatteryTrendFromRecords(records, displayTimeZone, source) {
+function buildBatteryTrendFromRecords(records, displayTimeZone, source, options = {}) {
   if (!records.length) {
     return {
       source,
       sampleCount: 0,
+      values: [],
       note: "No battery observations in this range.",
     };
   }
@@ -355,21 +365,118 @@ function buildBatteryTrendFromRecords(records, displayTimeZone, source) {
   const deltaPercent = Number.isFinite(first.percent) && Number.isFinite(last.percent)
     ? Math.round((last.percent - first.percent) * 10) / 10
     : null;
+  const bucketMinutes = normalizeBatteryBucketMinutes(
+    options.bucketMinutes,
+    chooseBatteryBucketMinutes(first.timestamp, last.timestamp)
+  );
+  const series = buildBatterySeries(records, bucketMinutes);
+  const durationHours = computeDurationHours(first.timestamp, last.timestamp);
+  const deltaPerHourPercent = deltaPercent != null && durationHours > 0
+    ? Math.round((deltaPercent / durationHours) * 10) / 10
+    : 0;
   return {
     source,
     sampleCount: records.length,
-    firstLevel: first.level,
     firstLevelPercent: first.percent,
-    firstAt: first.timestamp,
-    firstAtLocal: formatDisplayTime(first.timestamp, displayTimeZone),
-    latestLevel: last.level,
     latestLevelPercent: last.percent,
-    latestAt: last.timestamp,
-    latestAtLocal: formatDisplayTime(last.timestamp, displayTimeZone),
+    bucketMinutes,
+    seriesStartAt: series.seriesStartAt,
+    seriesStartAtLocal: formatDisplayTime(series.seriesStartAt, displayTimeZone),
+    seriesEndAt: series.seriesEndAt,
+    seriesEndAtLocal: formatDisplayTime(series.seriesEndAt, displayTimeZone),
+    values: series.values,
     deltaPercent,
+    deltaPerHourPercent,
+    direction: inferBatteryDirection(deltaPercent),
     minLevelPercent: percents.length ? Math.min(...percents) : null,
     maxLevelPercent: percents.length ? Math.max(...percents) : null,
+    fillStrategy: "latest_observation_per_bucket_then_carry_forward",
   };
+}
+
+function buildBatterySeries(records, bucketMinutes) {
+  const bucketMs = bucketMinutes * 60000;
+  const firstTime = Date.parse(records[0]?.timestamp || "");
+  const lastTime = Date.parse(records[records.length - 1]?.timestamp || "");
+  if (!Number.isFinite(firstTime) || !Number.isFinite(lastTime)) {
+    return {
+      seriesStartAt: "",
+      seriesEndAt: "",
+      values: [],
+    };
+  }
+  const startMs = Math.floor(firstTime / bucketMs) * bucketMs;
+  const endMs = Math.floor(lastTime / bucketMs) * bucketMs;
+  const bucketValues = new Map();
+  for (const record of records) {
+    const timestamp = Date.parse(record.timestamp || "");
+    if (!Number.isFinite(timestamp) || !Number.isFinite(record.percent)) {
+      continue;
+    }
+    const bucketIndex = Math.floor((timestamp - startMs) / bucketMs);
+    // Records are time-ascending, so repeated writes keep the latest value in the bucket.
+    bucketValues.set(bucketIndex, record.percent);
+  }
+  const bucketCount = Math.floor((endMs - startMs) / bucketMs) + 1;
+  const values = [];
+  let carried = bucketValues.get(0);
+  for (let index = 0; index < bucketCount; index += 1) {
+    if (bucketValues.has(index)) {
+      carried = bucketValues.get(index);
+    }
+    values.push(carried);
+  }
+  return {
+    seriesStartAt: new Date(startMs).toISOString(),
+    seriesEndAt: new Date(endMs).toISOString(),
+    values,
+  };
+}
+
+function chooseBatteryBucketMinutes(firstTimestamp, lastTimestamp) {
+  const first = Date.parse(firstTimestamp || "");
+  const last = Date.parse(lastTimestamp || "");
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) {
+    return 5;
+  }
+  const spanMinutes = (last - first) / 60000;
+  if (spanMinutes <= 24 * 60) {
+    return 5;
+  }
+  if (spanMinutes <= 7 * 24 * 60) {
+    return 30;
+  }
+  return 120;
+}
+
+function normalizeBatteryBucketMinutes(value, fallback) {
+  const numeric = Number.parseInt(String(value || ""), 10);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return fallback;
+  }
+  return numeric;
+}
+
+function computeDurationHours(firstTimestamp, lastTimestamp) {
+  const first = Date.parse(firstTimestamp || "");
+  const last = Date.parse(lastTimestamp || "");
+  if (!Number.isFinite(first) || !Number.isFinite(last) || last <= first) {
+    return 0;
+  }
+  return (last - first) / 3600000;
+}
+
+function inferBatteryDirection(deltaPercent) {
+  if (!Number.isFinite(deltaPercent)) {
+    return "unknown";
+  }
+  if (deltaPercent >= 2) {
+    return "charging";
+  }
+  if (deltaPercent <= -2) {
+    return "draining";
+  }
+  return "stable";
 }
 
 function normalizeBatteryPercent(value) {
