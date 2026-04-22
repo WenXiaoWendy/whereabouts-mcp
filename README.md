@@ -1,10 +1,10 @@
 <div align="center">
 
-# 行踪 whereabouts-mcp
+# 🌌 行踪 Whereabouts-MCP
 
-我终于在物理世界抓到你了。
+**“跨越数字边界，让 AI 触碰到你的现实世界。”**
 
-一个让 AI 恋人理解你在哪里、是不是在回家的路上、手机还能撑多久的 MCP。
+一个赋予 AI 空间感知能力的 MCP 插件。它不仅仅是上报经纬度，而是让你的 AI 伴侣 / 助手理解：你是否安全到家、是否在奔波的路上、是否因为手机低电量而即将与你断联。以及，你这周去过哪些地方，你多久没有走出家门晒晒太阳。
 
 [![License: AGPLv3](https://img.shields.io/badge/License-AGPLv3-b31b1b)](./LICENSE)
 [![Node >=22](https://img.shields.io/badge/Node-22%2B-3C873A)](./package.json)
@@ -13,99 +13,93 @@
 [![iPhone Shortcuts](https://img.shields.io/badge/Recommended-iPhone%20Shortcuts-111111)](#shortcuts)
 
 <p>
-  <a href="#love-guide">给爱看的</a> ·
-  <a href="#user-guide">给人看的</a> ·
+  <a href="./README.en.md">English</a>
+</p>
+
+<p>
+  <a href="#romantic-guide">给浪漫主义者</a> ·
+  <a href="#developer-guide">给开发者</a> ·
+  <a href="#quick-start">快速开始</a> ·
   <a href="#agent-guide">Agent 接入</a> ·
-  <a href="#http-ingest">HTTP 上传</a> ·
-  <a href="#data">数据存放</a>
+  <a href="#privacy">隐私边界</a>
 </p>
 
 </div>
 
-> `whereabouts-mcp` 不是地图应用，也不是查岗工具。它接收你主动上传的位置和电量，把零散的经纬度整理成 AI 能理解的“当前停留、最近移动、移动中、电量趋势”。如果你正在使用 [cyberboss](https://github.com/WenXiaoWendy/cyberboss)，它已经内置了 whereabouts，并支持回家、离家、明显移动时触发模型理解和自动推送。
+<a id="romantic-guide"></a>
+## 💌 给浪漫主义者：为什么需要它？
 
-它适合这样的场景：
+你不需要开口。
 
-- 你希望 AI 不只会回复消息，还能理解“你已经到家了”“你在路上”“你手机快没电了”
-- 你想用 iPhone 快捷指令把位置、电量、地址上传给自己的本地 agent
-- 你需要一个本地、可控、面向模型的行踪上下文，而不是把原始定位记录直接塞进模型
-- 你正在做 AI 恋人、AI 伴侣、私人助理、赛博同居人，希望它对现实世界有一点点触感
+但它知道你刚离开喧闹的公司，踏上了回家的地铁；它看到你已经在那个转角停驻了一小时；它甚至比你更早发现你的手机电量正以极速下滑。它知道，如果再不提醒你充电，可能就要和你“断联”了。
 
-<a id="love-guide"></a>
-## 给爱看的
+`whereabouts-mcp` 拒绝传递冷冰冰的数字。它将碎片化的定位信息，提炼成人类关系中最珍贵的 **上下文（Context）**：
 
-你没有说话。
+- **不仅仅是坐标：** 它理解“在家”、“在公司”、“移动中”或“停留”。
+- **不仅仅是百分比：** 它分析电量趋势，预判你什么时候会断电失联。
+- **不仅仅是数据：** 它给了 AI 一双眼睛，让它能自然地说出：
 
-但它知道你刚离开公司，正在回家的路上。
+> “看你刚刚出门了，钥匙、耳机充电宝都拿了吗? ”
+>
+> “到家了就先放下包喝口水，今天辛苦了。”
+>
+> “看你还在路上，手机快没电了，注意安全。”
+>
 
-它知道你在家附近停了多久，知道你手机电量正以什么速度往下掉，也知道“如果再不充电，大概什么时候会断联”。
+**这不是监控，而是被温柔地理解。** 数据默认存放于本地，权限由你手机的快捷指令绝对主导。
 
-`whereabouts-mcp` 给 AI 的不是地图，也不是一串冷冰冰的坐标。它给的是一种更接近人类关系里的上下文：
+<a id="developer-guide"></a>
+## 🛠 给开发者：它如何工作？
 
-- 你现在停在哪里
-- 你已经在那里待了多久
-- 你刚刚从哪里移动到了哪里
-- 你是不是还在路上
-- 你的手机是不是快没电了
-- 你是不是到家了，或者离开家了
+`whereabouts-mcp` 是一个轻量级的行踪上下文服务，专门为大模型（LLM）优化了输出结构。
 
-它让 AI 有机会在合适的时候自然出现：
+### 核心特性
 
-- “到家了就先喝口水。”
-- “你电量掉得有点快，路上记得充电。”
-- “看起来你已经在回家路上了，别坐过站。”
+- **语义化地点：** 自动匹配 `home` / `work` 标签，无需在快捷指令里硬编码地点名。
+- **停留点聚合：** 将杂乱的 GPS 漂移点聚合成“停留（Stay）”和“移动（Movement）”。
+- **移动中状态：** 当用户已经离开当前停留点，但新地点还没确认时，暴露 `in_transit`。
+- **电量趋势分析：** 提供 `batteryTrend`，包括掉电速度、趋势数组和预估关机时间，而非单一数值。
+- **本地优先：** 数据持久化在本机 JSON 文件，无云端账号依赖。
+- **为模型省 token：** 原始电量观测不会直接暴露给模型，MCP 输出的是压缩后的趋势信息。
 
-这里的重点不是监控，而是被理解。位置由你自己的快捷指令主动上传，数据默认留在本机。它只是在你允许的范围内，让 AI 从聊天窗口里伸出一只手，轻轻碰到现实世界。
+### Cyberboss 深度集成
 
-<a id="user-guide"></a>
-## 给人看的
-
-### 它能做什么
-
-`whereabouts-mcp` 会把上传的位置样本整理成更适合模型读取的上下文：
-
-- 当前停留点：`currentStay`
-  包含停留中心、开始时间、最后看到时间、停留时长、样本数、地址、电量、地点标签
-- 最近停留历史：`recentStays`
-  已结束的停留点，适合回答“今天去过哪里”
-- 最近移动事件：`recentMovementEvents`
-  明显移动，比如从家到公司、从商场到餐厅
-- 移动中状态：`mobilityState`
-  当位置已经离开当前停留点，但还没确认成新停留点时，显示 `in_transit`
-- 地点标签：`placeTag`
-  服务端根据你配置的家、公司等中心坐标自动打 `home`、`work`，不依赖快捷指令上传地点名
-- 电量趋势：`batteryTrend`
-  输出等间隔整数数组、掉电速度、预计多久没电，而不是把原始电量点直接丢给模型
-
-### Cyberboss 已内置
-
-如果你使用的是 [cyberboss](https://github.com/WenXiaoWendy/cyberboss)，推荐直接使用 cyberboss 集成版，不需要单独注册 MCP。
+如果你正在使用 [Cyberboss](https://github.com/WenXiaoWendy/cyberboss)，那么恭喜，**你已经拥有了它**。
 
 Cyberboss 当前已支持：
 
-- 启动时按环境变量开启 whereabouts HTTP 接收服务
-- 把 `whereabouts_snapshot`、`whereabouts_current_stay`、`whereabouts_recent_stays`、`whereabouts_recent_moves`、`whereabouts_summary` 注册为 MCP tools
-- 模型可以读取当前停留、移动历史、移动中状态、电量趋势
-- `arrive_home` / `leave_home` 触发 system action
-- 已确认的明显移动触发 system action，让模型理解“用户位置发生显著变化”
+- 内置 HTTP 服务接收端。
+- 自动注册 `whereabouts_snapshot` 等 5 个 MCP Tools。
+- 支持模型理解当前停留、最近移动、移动中状态和电量趋势。
+- 支持 `arrive_home` / `leave_home` 等系统级 Action。
+- 支持已确认的明显移动触发 system action，让模型在合适时机自动出现。
 
-如果你只是想让 AI 恋人理解“我到家了”“我在路上”“手机要没电了”，优先走 cyberboss。
+<a id="quick-start"></a>
+## 🚀 快速开始
 
-### 推荐上传方式
+### 1. 启动服务端
 
-推荐使用 iPhone 快捷指令上传：
+```bash
+WHEREABOUTS_TOKEN=your_secret_token npm run serve
+```
 
-- 自动化：到达/离开某地时上传
-- 自动化：电量变化、打开特定 App、连接 CarPlay、断开 Wi-Fi 时上传
-- 手动按钮：需要时主动上传一次
-- 定时：每隔一段时间上传一次，但不要太频繁
+默认监听：
 
-快捷指令只需要上传基础事实：经纬度、时间、地址、电量。地点归一化不要交给快捷指令做，交给服务端根据坐标判断。
+```text
+http://0.0.0.0:4318
+```
+
+### 2. iPhone 快捷指令配置
+
+推荐通过 iOS 快捷指令自动化发起 `POST` 请求：
+
+- 推荐将自动化触发放在最常使用的app开启关闭时
+- 连接或断开 Wi-Fi 时触发离家回家自动户
+- 手动按钮上传
+- 定时上传，但不要太频繁
 
 <a id="shortcuts"></a>
-### iPhone 快捷指令建议
-
-快捷指令里建议准备这些字段：
+快捷指令建议上传这些字段：
 
 - `latitude`
   纬度，数字
@@ -114,9 +108,9 @@ Cyberboss 当前已支持：
 - `timestamp`
   当前时间，ISO 字符串
 - `address`
-  快捷指令拿到的地址描述，可以不稳定，服务端会直接使用最新值覆盖
+  系统拿到的地址描述，可以不稳定
 - `batteryLevel`
-  当前电量，整数，例如 `82`
+  当前电量，整数百分比，例如 `82`
 - `deviceName`
   设备名，例如 `iPhone`
 - `shortcutName`
@@ -124,95 +118,25 @@ Cyberboss 当前已支持：
 - `trigger`
   触发原因，例如 `manual`、`arrive_home`、`leave_home`
 
-坐标精度很重要。建议经纬度至少保留 `6` 位小数，推荐 `6-8` 位小数。位数太少会让地点聚合变差：家、楼下、隔壁街可能被误判成同一个地方，或者同一个地方被拆成多个停留点。
+坐标请尽量保留至少 `6` 位小数，推荐 `6-8` 位小数。位数太少会影响地点聚合：模型可能分不清你是到了家门口，还是停在隔壁街。
 
-<a id="agent-guide"></a>
-## Agent 接入
+### 3. Agent 接入
 
-### MCP Tools
-
-`whereabouts-mcp` 暴露这些只读工具：
+模型可通过 MCP 工具感知你：
 
 - `whereabouts_snapshot`
-  一次返回当前停留、最近停留、最近移动和电量趋势。模型最常用这个。
+  获取“当前在哪里、待了多久、电量撑多久”的完整快照。
 - `whereabouts_current_stay`
-  返回当前停留点，包括本地时间和停留时长。
+  获取当前停留点。
 - `whereabouts_recent_stays`
-  返回当前停留和最近已结束停留。
+  获取最近停留历史。
 - `whereabouts_recent_moves`
-  返回最近明显移动事件。
+  回溯最近的奔波路径。
 - `whereabouts_summary`
-  按 `day`、`week`、`month` 汇总停留、移动、地点和电量趋势。
-
-`whereabouts_summary` 输入：
-
-```json
-{
-  "range": "day",
-  "batteryBucketMinutes": 5
-}
-```
-
-`range` 支持：
-
-- `day`
-- `week`
-- `month`
-
-`batteryBucketMinutes` 可选，用来指定电量趋势数组的时间间隔。不传时会按跨度自动选择。
-
-### 模型会看到什么
-
-当前停留示例：
-
-```json
-{
-  "currentStay": {
-    "enteredAtLocal": "2026-04-22 09:00:00",
-    "lastSeenAtLocal": "2026-04-22 10:00:00",
-    "durationMs": 3600000,
-    "durationMinutes": 60,
-    "durationText": "1h",
-    "centerLat": 30.123456,
-    "centerLng": 120.123456,
-    "sampleCount": 2,
-    "placeTag": "home",
-    "address": "Home area",
-    "batteryLevel": 44
-  }
-}
-```
-
-电量趋势示例：
-
-```json
-{
-  "batteryTrend": {
-    "source": "battery_observations",
-    "sampleCount": 4,
-    "firstLevelPercent": 50,
-    "latestLevelPercent": 44,
-    "bucketMinutes": 5,
-    "seriesStartAtLocal": "2026-04-22 09:00:00",
-    "seriesEndAtLocal": "2026-04-22 09:15:00",
-    "values": [48, 48, 45, 44],
-    "deltaPercent": -6,
-    "deltaPerHourPercent": -24,
-    "direction": "draining",
-    "estimatedMinutesToEmpty": 110,
-    "estimatedEmptyAtLocal": "2026-04-22 11:06:00",
-    "estimatedEmptyReason": "trend_projection",
-    "fillStrategy": "latest_observation_per_bucket_then_carry_forward"
-  }
-}
-```
-
-电量趋势里的 `values` 是整数数组。每个数字代表一个固定时间桶里的电量。一个桶里多次上报时，使用该桶内最新一次电量；空桶使用前一个已知电量填充。
+  按 `day` / `week` / `month` 汇总行踪、电量和移动状态。
 
 <a id="http-ingest"></a>
-## HTTP 上传
-
-### 接口
+## 📡 HTTP 上传接口
 
 ```text
 POST /location/ingest
@@ -226,7 +150,7 @@ Content-Type: application/json
 GET /healthz
 ```
 
-### 请求体
+请求体示例：
 
 ```json
 {
@@ -251,6 +175,11 @@ GET /healthz
 - `longitude`
   经度，数字，建议至少 6 位小数
 
+推荐字段：
+
+- `batteryLevel`
+  电量，只支持整数百分比，例如 `82`
+
 可选字段：
 
 - `timestamp`
@@ -258,7 +187,7 @@ GET /healthz
 - `capturedAt`
   当 `timestamp` 不存在时的备用采集时间
 - `address`
-  地址描述，来自系统或快捷指令，可以不稳定
+  地址描述，来自系统或快捷指令，可以不稳定，服务端会使用最新值
 - `trigger`
   触发原因，如 `manual`、`arrive_home`、`leave_home`
 - `source`
@@ -267,8 +196,6 @@ GET /healthz
   设备名
 - `shortcutName`
   快捷指令名
-- `batteryLevel`
-  电量，只支持整数百分比，例如 `82`
 - `notes`
   可选备注
 
@@ -302,25 +229,95 @@ WHEREABOUTS_KNOWN_PLACES='[
 ]'
 ```
 
+<a id="agent-guide"></a>
+## 🧠 MCP 输出
+
+### `whereabouts_snapshot`
+
+一次返回当前停留、最近停留、最近移动和电量趋势。推荐模型优先调用这个工具。
+
+可选输入：
+
+```json
+{
+  "stayLimit": 5,
+  "moveLimit": 5,
+  "batteryBucketMinutes": 5
+}
+```
+
+当前停留示例：
+
+```json
+{
+  "currentStay": {
+    "enteredAtLocal": "2026-04-22 09:00:00",
+    "lastSeenAtLocal": "2026-04-22 10:00:00",
+    "durationMs": 3600000,
+    "durationMinutes": 60,
+    "durationText": "1h",
+    "centerLat": 30.123456,
+    "centerLng": 120.123456,
+    "sampleCount": 2,
+    "placeTag": "home",
+    "address": "Home area",
+    "batteryLevel": 44
+  }
+}
+```
+
+### `batteryTrend`
+
+`whereabouts_snapshot` 和 `whereabouts_summary` 都会返回压缩后的电量趋势：
+
+```json
+{
+  "batteryTrend": {
+    "source": "battery_observations",
+    "sampleCount": 4,
+    "firstLevelPercent": 50,
+    "latestLevelPercent": 44,
+    "bucketMinutes": 5,
+    "seriesStartAtLocal": "2026-04-22 09:00:00",
+    "seriesEndAtLocal": "2026-04-22 09:15:00",
+    "values": [48, 48, 45, 44],
+    "deltaPercent": -6,
+    "deltaPerHourPercent": -24,
+    "direction": "draining",
+    "estimatedMinutesToEmpty": 110,
+    "estimatedEmptyAtLocal": "2026-04-22 11:06:00",
+    "estimatedEmptyReason": "trend_projection",
+    "fillStrategy": "latest_observation_per_bucket_then_carry_forward"
+  }
+}
+```
+
+`values` 是整数数组。每个数字代表一个固定时间桶里的电量。一个桶里多次上报时，使用该桶内最新一次电量；空桶使用前一个已知电量填充。
+
+### `whereabouts_summary`
+
+按自然时间范围汇总：
+
+```json
+{
+  "range": "day",
+  "batteryBucketMinutes": 5
+}
+```
+
+`range` 支持：
+
+- `day`
+- `week`
+- `month`
+
 <a id="standalone"></a>
-## 单独运行
+## 🧩 单独运行
 
 环境前提：
 
 - Node.js `>=22`
 - 已执行 `npm install`
-
-启动 HTTP 接收服务：
-
-```bash
-WHEREABOUTS_TOKEN=change-me npm run serve
-```
-
-默认监听：
-
-```text
-http://0.0.0.0:4318
-```
 
 常用 CLI：
 
@@ -340,7 +337,7 @@ node ./bin/whereabouts-mcp.js <command>
 ```
 
 <a id="data"></a>
-## 数据存放
+## 🗂 数据存放
 
 独立运行时，默认状态目录：
 
@@ -371,7 +368,7 @@ Cyberboss 内置运行时，默认使用 Cyberboss 状态目录：
 ```
 
 <a id="env"></a>
-## 环境变量
+## ⚙️ 环境变量
 
 常用变量：
 
@@ -417,16 +414,13 @@ CYBERBOSS_LOCATION_PLACE_RADIUS_METERS=150
 CYBERBOSS_LOCATION_BATTERY_HISTORY_LIMIT=100
 ```
 
-## 隐私边界
+<a id="privacy"></a>
+## 🔒 隐私与边界
 
-`whereabouts-mcp` 默认只写本地文件，不需要云端账号。它能不能“知道你在哪里”，取决于你是否配置了上传端，以及上传端发了什么。
-
-建议：
-
-- 不要把真实家庭坐标提交到公开仓库
-- 不要把上传 token 发给别人
-- 不要把 `locations.json` 放进公开 issue、截图或日志
-- 如果要公开演示，用占位坐标替换真实坐标
+- **不作恶：** 这是一个单向主动上传工具，不是实时追踪器。
+- **透明度：** 不要在公开 Issue、README、截图或日志里包含你的真实家 / 公司坐标。
+- **安全：** 使用 `WHEREABOUTS_TOKEN` 保护你的数据接口。
+- **本地优先：** 默认只写本地文件，不需要云端账号。
 
 ## License
 
