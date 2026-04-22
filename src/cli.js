@@ -150,7 +150,7 @@ function runSummaryCommand(service, args) {
   if (summary.knownPlaces.length) {
     console.log("places:");
     for (const place of summary.knownPlaces) {
-      console.log(`- ${place.placeLabel || place.placeId || place.address || "unknown"}: ${place.durationText}`);
+      console.log(`- ${place.placeTag || place.address || "unknown"}: ${place.durationText}`);
     }
   }
   if (summary.batteryTrend.sampleCount) {
@@ -279,7 +279,10 @@ function printServeHelp(config) {
     "  WHEREABOUTS_HOST",
     "  WHEREABOUTS_PORT",
     "  WHEREABOUTS_TOKEN",
-    "  WHEREABOUTS_SAMPLE_LIMIT",
+    "  WHEREABOUTS_BATTERY_HISTORY_LIMIT",
+    "  WHEREABOUTS_HOME_CENTER",
+    "  WHEREABOUTS_WORK_CENTER",
+    "  WHEREABOUTS_PLACE_RADIUS_METERS",
     "  WHEREABOUTS_STAY_MERGE_RADIUS_METERS",
     "  WHEREABOUTS_STAY_BREAK_RADIUS_METERS",
     "  WHEREABOUTS_STAY_BREAK_SAMPLES",

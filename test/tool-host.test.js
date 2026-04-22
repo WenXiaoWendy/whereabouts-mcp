@@ -8,9 +8,9 @@ const { LocationStore } = require("../src/location-store");
 const { WhereaboutsService } = require("../src/whereabouts-service");
 const { WhereaboutsToolHost } = require("../src/tool-host");
 
-function createService() {
+function createService(storeOptions = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whereabouts-tool-host-test-"));
-  const store = new LocationStore({ filePath: path.join(dir, "locations.json") });
+  const store = new LocationStore({ filePath: path.join(dir, "locations.json"), ...storeOptions });
   return new WhereaboutsService({ store });
 }
 
@@ -35,14 +35,17 @@ test("snapshot tool returns current stay and recent history", async () => {
 });
 
 test("summary tool returns duration, mobility state, places, moves, and battery trend", async () => {
-  const service = createService();
+  const service = createService({
+    knownPlaces: [
+      { tag: "home", latitude: 22.6, longitude: 114.0, radiusMeters: 150 },
+      { tag: "work", latitude: 22.61, longitude: 114.01, radiusMeters: 150 },
+    ],
+  });
   service.appendPoint({
     latitude: 22.6,
     longitude: 114.0,
     timestamp: isoAgo(4),
     address: "Home",
-    placeId: "home",
-    placeLabel: "Home",
     batteryLevel: 51,
   });
   service.appendPoint({
@@ -50,8 +53,6 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
     longitude: 114.0001,
     timestamp: isoAgo(3),
     address: "Home",
-    placeId: "home",
-    placeLabel: "Home",
     batteryLevel: 40,
   });
   service.appendPoint({
@@ -59,8 +60,6 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
     longitude: 114.01,
     timestamp: isoAgo(2),
     address: "Office",
-    placeId: "work",
-    placeLabel: "Work",
     batteryLevel: 10,
   });
   service.appendPoint({
@@ -68,8 +67,6 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
     longitude: 114.0101,
     timestamp: isoAgo(1),
     address: "Office",
-    placeId: "work",
-    placeLabel: "Work",
     batteryLevel: 6,
   });
 
@@ -80,7 +77,8 @@ test("summary tool returns duration, mobility state, places, moves, and battery 
   assert.equal(result.data.mobilityState.state, "staying");
   assert.equal(result.data.moveCount, 1);
   assert.equal(result.data.knownPlaces.length, 2);
-  assert.equal(result.data.batteryTrend.source, "raw_samples");
+  assert.equal(result.data.knownPlaces[0].placeTag, "work");
+  assert.equal(result.data.batteryTrend.source, "battery_observations");
   assert.equal(result.data.batteryTrend.firstLevelPercent, 51);
   assert.equal(result.data.batteryTrend.latestLevelPercent, 6);
   assert.equal(result.data.batteryTrend.deltaPercent, -45);
@@ -90,6 +88,28 @@ test("current stay tool returns empty state when no data exists", async () => {
   const host = new WhereaboutsToolHost({ service: createService() });
   const result = await host.invokeTool("whereabouts_current_stay", {});
   assert.equal(result.data.currentStay, null);
+});
+
+test("current stay tool includes duration fields", async () => {
+  const service = createService();
+  service.appendPoint({
+    latitude: 22.6,
+    longitude: 114.0,
+    timestamp: "2026-04-22T01:00:00.000Z",
+    address: "Home",
+  });
+  service.appendPoint({
+    latitude: 22.6001,
+    longitude: 114.0001,
+    timestamp: "2026-04-22T02:00:00.000Z",
+    address: "Home",
+  });
+
+  const host = new WhereaboutsToolHost({ service });
+  const result = await host.invokeTool("whereabouts_current_stay", {});
+  assert.equal(result.data.currentStay.durationMs, 3600000);
+  assert.equal(result.data.currentStay.durationMinutes, 60);
+  assert.equal(result.data.currentStay.durationText, "1h");
 });
 
 test("tool host rejects unknown fields", async () => {

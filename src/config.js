@@ -13,8 +13,10 @@ function readConfig(argv = process.argv.slice(2)) {
     token: readTextEnv("WHEREABOUTS_TOKEN"),
     historyLimit: readIntEnv("WHEREABOUTS_HISTORY_LIMIT") || 1000,
     movementEventLimit: readIntEnv("WHEREABOUTS_MOVEMENT_EVENT_LIMIT"),
-    sampleLimit: readIntEnv("WHEREABOUTS_SAMPLE_LIMIT"),
-    stayMergeRadiusMeters: readIntEnv("WHEREABOUTS_STAY_MERGE_RADIUS_METERS") || 50,
+    batteryHistoryLimit: readIntEnv("WHEREABOUTS_BATTERY_HISTORY_LIMIT"),
+    knownPlaces: readKnownPlacesEnv(),
+    knownPlaceRadiusMeters: readIntEnv("WHEREABOUTS_PLACE_RADIUS_METERS") || 150,
+    stayMergeRadiusMeters: readIntEnv("WHEREABOUTS_STAY_MERGE_RADIUS_METERS") || 100,
     stayBreakConfirmRadiusMeters: readIntEnv("WHEREABOUTS_STAY_BREAK_RADIUS_METERS") || 200,
     stayBreakConfirmSamples: readIntEnv("WHEREABOUTS_STAY_BREAK_SAMPLES") || 2,
     majorMoveThresholdMeters: readIntEnv("WHEREABOUTS_MAJOR_MOVE_THRESHOLD_METERS") || 1000,
@@ -36,6 +38,40 @@ function readIntEnv(name) {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function readKnownPlacesEnv() {
+  const fromJson = parseKnownPlacesJson(readTextEnv("WHEREABOUTS_KNOWN_PLACES"));
+  const fromCenters = [
+    parseKnownPlaceCenter("home", readTextEnv("WHEREABOUTS_HOME_CENTER")),
+    parseKnownPlaceCenter("work", readTextEnv("WHEREABOUTS_WORK_CENTER")),
+  ].filter(Boolean);
+  return [...fromJson, ...fromCenters];
+}
+
+function parseKnownPlacesJson(value) {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseKnownPlaceCenter(tag, value) {
+  const parts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length !== 2) {
+    return null;
+  }
+  const latitude = Number(parts[0]);
+  const longitude = Number(parts[1]);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+  return { tag, latitude, longitude };
 }
 
 module.exports = { readConfig };

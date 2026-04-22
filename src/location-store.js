@@ -6,16 +6,18 @@ class LocationStore {
   constructor({
     filePath,
     historyLimit = 1000,
-    stayMergeRadiusMeters = 50,
+    stayMergeRadiusMeters = 100,
     stayBreakConfirmRadiusMeters = 200,
     stayBreakConfirmSamples = 2,
     majorMoveThresholdMeters = 1000,
     movementEventLimit,
-    sampleLimit,
+    batteryHistoryLimit,
+    knownPlaces = [],
+    knownPlaceRadiusMeters = 150,
   }) {
     this.filePath = filePath;
     this.historyLimit = normalizePositiveInt(historyLimit, 1000);
-    this.stayMergeRadiusMeters = normalizePositiveInt(stayMergeRadiusMeters, 50);
+    this.stayMergeRadiusMeters = normalizePositiveInt(stayMergeRadiusMeters, 100);
     this.stayBreakConfirmRadiusMeters = Math.max(
       this.stayMergeRadiusMeters,
       normalizePositiveInt(stayBreakConfirmRadiusMeters, 200)
@@ -26,7 +28,9 @@ class LocationStore {
       movementEventLimit,
       Math.min(this.historyLimit, 100)
     );
-    this.sampleLimit = normalizePositiveInt(sampleLimit, this.historyLimit);
+    this.batteryHistoryLimit = normalizePositiveInt(batteryHistoryLimit, this.historyLimit);
+    this.knownPlaceRadiusMeters = normalizePositiveInt(knownPlaceRadiusMeters, 150);
+    this.knownPlaces = normalizeKnownPlaces(knownPlaces, this.knownPlaceRadiusMeters);
     this.state = createEmptyState();
     this.ensureParentDirectory();
     this.load();
@@ -52,12 +56,11 @@ class LocationStore {
 
   append(record) {
     this.load();
-    const point = normalizeLocationPoint(record);
+    const point = this.annotatePoint(normalizeLocationPoint(record));
     if (!point) {
       throw new Error("invalid location payload");
     }
-    this.state.recentSamples.push({ ...point });
-    this.state.recentSamples = this.state.recentSamples.slice(-this.sampleLimit);
+    appendBatteryObservation(this.state, point, this.batteryHistoryLimit);
     const movementEvent = this.applyPoint(point);
     this.save();
     return {
@@ -88,10 +91,10 @@ class LocationStore {
     return this.state.recentMovementEvents.slice(-normalizedLimit).reverse().map((event) => ({ ...event }));
   }
 
-  listRecentSamples(limit = 100) {
+  listRecentBatteryObservations(limit = 100) {
     this.load();
     const normalizedLimit = normalizePositiveInt(limit, 100);
-    return this.state.recentSamples.slice(-normalizedLimit).reverse().map((sample) => ({ ...sample }));
+    return this.state.batteryObservations.slice(-normalizedLimit).reverse().map((observation) => ({ ...observation }));
   }
 
   getPendingBreak() {
@@ -102,10 +105,14 @@ class LocationStore {
   normalizeLoadedState(parsed) {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && ("currentStay" in parsed || "recentStays" in parsed || "recentMovementEvents" in parsed)) {
       return {
-        currentStay: normalizeStay(parsed.currentStay),
-        recentStays: normalizeStayArray(parsed.recentStays, this.historyLimit),
+        currentStay: this.annotateStay(normalizeStay(parsed.currentStay)),
+        recentStays: normalizeStayArray(parsed.recentStays, this.historyLimit)
+          .map((stay) => this.annotateStay(stay)),
         recentMovementEvents: normalizeMovementEventArray(parsed.recentMovementEvents, this.movementEventLimit),
-        recentSamples: normalizeSampleArray(parsed.recentSamples, this.sampleLimit),
+        batteryObservations: normalizeBatteryObservationArray(
+          parsed.batteryObservations || parsed.recentSamples,
+          this.batteryHistoryLimit
+        ),
         _meta: {
           pendingBreak: normalizePendingBreak(parsed?._meta?.pendingBreak),
         },
@@ -119,9 +126,9 @@ class LocationStore {
 
     this.state = createEmptyState();
     for (const point of legacyPoints) {
-      this.state.recentSamples.push({ ...point });
-      this.state.recentSamples = this.state.recentSamples.slice(-this.sampleLimit);
-      this.applyPoint(point);
+      const annotatedPoint = this.annotatePoint(point);
+      appendBatteryObservation(this.state, annotatedPoint, this.batteryHistoryLimit);
+      this.applyPoint(annotatedPoint);
     }
     return this.state;
   }
@@ -131,7 +138,7 @@ class LocationStore {
       currentStay: this.state.currentStay ? { ...this.state.currentStay } : null,
       recentStays: this.state.recentStays.map((stay) => ({ ...stay })),
       recentMovementEvents: this.state.recentMovementEvents.map((event) => ({ ...event })),
-      recentSamples: this.state.recentSamples.map((sample) => ({ ...sample })),
+      batteryObservations: this.state.batteryObservations.map((observation) => ({ ...observation })),
     };
     if (this.state._meta?.pendingBreak) {
       serialized._meta = {
@@ -202,6 +209,20 @@ class LocationStore {
     this.state.recentMovementEvents = this.state.recentMovementEvents.slice(-this.movementEventLimit);
     return movementEvent;
   }
+
+  annotatePoint(point) {
+    if (!point) {
+      return null;
+    }
+    return applyKnownPlaceTag({ ...point }, this.knownPlaces);
+  }
+
+  annotateStay(stay) {
+    if (!stay) {
+      return null;
+    }
+    return applyKnownPlaceTag({ ...stay }, this.knownPlaces);
+  }
 }
 
 function createEmptyState() {
@@ -209,7 +230,7 @@ function createEmptyState() {
     currentStay: null,
     recentStays: [],
     recentMovementEvents: [],
-    recentSamples: [],
+    batteryObservations: [],
     _meta: {
       pendingBreak: null,
     },
@@ -253,8 +274,6 @@ function normalizeLocationPoint(value) {
   assignOptionalText(point, "trigger", value.trigger);
   assignOptionalText(point, "deviceName", value.deviceName);
   assignOptionalText(point, "shortcutName", value.shortcutName);
-  assignOptionalText(point, "placeId", value.placeId);
-  assignOptionalText(point, "placeLabel", value.placeLabel);
   assignOptionalText(point, "address", value.address);
   assignOptionalText(point, "notes", value.notes);
   return point;
@@ -312,8 +331,7 @@ function createPendingBreak(point) {
     trigger: point.trigger,
     deviceName: point.deviceName,
     shortcutName: point.shortcutName,
-    placeId: point.placeId,
-    placeLabel: point.placeLabel,
+    placeTag: point.placeTag,
     address: point.address,
     batteryLevel: point.batteryLevel,
   };
@@ -342,8 +360,7 @@ function finalizePendingBreak(pendingBreak) {
     ...(pendingBreak.trigger ? { trigger: pendingBreak.trigger } : {}),
     ...(pendingBreak.deviceName ? { deviceName: pendingBreak.deviceName } : {}),
     ...(pendingBreak.shortcutName ? { shortcutName: pendingBreak.shortcutName } : {}),
-    ...(pendingBreak.placeId ? { placeId: pendingBreak.placeId } : {}),
-    ...(pendingBreak.placeLabel ? { placeLabel: pendingBreak.placeLabel } : {}),
+    ...(pendingBreak.placeTag ? { placeTag: pendingBreak.placeTag } : {}),
     ...(pendingBreak.address ? { address: pendingBreak.address } : {}),
     ...(pendingBreak.batteryLevel != null ? { batteryLevel: pendingBreak.batteryLevel } : {}),
   };
@@ -367,10 +384,8 @@ function createMovementEvent(fromStay, toStay, distanceMeters) {
 
   assignOptionalText(event, "fromAddress", fromStay.address);
   assignOptionalText(event, "toAddress", toStay.address);
-  assignOptionalText(event, "fromPlaceId", fromStay.placeId);
-  assignOptionalText(event, "fromPlaceLabel", fromStay.placeLabel);
-  assignOptionalText(event, "toPlaceId", toStay.placeId);
-  assignOptionalText(event, "toPlaceLabel", toStay.placeLabel);
+  assignOptionalText(event, "fromPlaceTag", fromStay.placeTag);
+  assignOptionalText(event, "toPlaceTag", toStay.placeTag);
   assignOptionalNumber(event, "fromCenterLat", fromStay.centerLat);
   assignOptionalNumber(event, "fromCenterLng", fromStay.centerLng);
   assignOptionalNumber(event, "toCenterLat", toStay.centerLat);
@@ -383,8 +398,7 @@ function applyPointMetadata(target, point) {
   assignOptionalText(target, "trigger", point.trigger);
   assignOptionalText(target, "deviceName", point.deviceName);
   assignOptionalText(target, "shortcutName", point.shortcutName);
-  assignOptionalText(target, "placeId", point.placeId);
-  assignOptionalText(target, "placeLabel", point.placeLabel);
+  assignOptionalText(target, "placeTag", point.placeTag);
   assignOptionalText(target, "address", point.address);
   assignOptionalNumber(target, "batteryLevel", point.batteryLevel);
 }
@@ -413,8 +427,7 @@ function normalizeStay(value) {
   assignOptionalText(stay, "trigger", value.trigger);
   assignOptionalText(stay, "deviceName", value.deviceName);
   assignOptionalText(stay, "shortcutName", value.shortcutName);
-  assignOptionalText(stay, "placeId", value.placeId);
-  assignOptionalText(stay, "placeLabel", value.placeLabel);
+  assignOptionalText(stay, "placeTag", value.placeTag);
   assignOptionalText(stay, "address", value.address);
   assignOptionalNumber(stay, "batteryLevel", value.batteryLevel);
   const leftAt = normalizeIsoTime(value.leftAt);
@@ -443,10 +456,8 @@ function normalizeMovementEvent(value) {
   };
   assignOptionalText(event, "fromAddress", value.fromAddress);
   assignOptionalText(event, "toAddress", value.toAddress);
-  assignOptionalText(event, "fromPlaceId", value.fromPlaceId);
-  assignOptionalText(event, "fromPlaceLabel", value.fromPlaceLabel);
-  assignOptionalText(event, "toPlaceId", value.toPlaceId);
-  assignOptionalText(event, "toPlaceLabel", value.toPlaceLabel);
+  assignOptionalText(event, "fromPlaceTag", value.fromPlaceTag);
+  assignOptionalText(event, "toPlaceTag", value.toPlaceTag);
   assignOptionalNumber(event, "fromCenterLat", value.fromCenterLat);
   assignOptionalNumber(event, "fromCenterLng", value.fromCenterLng);
   assignOptionalNumber(event, "toCenterLat", value.toCenterLat);
@@ -476,8 +487,7 @@ function normalizePendingBreak(value) {
   assignOptionalText(pendingBreak, "trigger", value.trigger);
   assignOptionalText(pendingBreak, "deviceName", value.deviceName);
   assignOptionalText(pendingBreak, "shortcutName", value.shortcutName);
-  assignOptionalText(pendingBreak, "placeId", value.placeId);
-  assignOptionalText(pendingBreak, "placeLabel", value.placeLabel);
+  assignOptionalText(pendingBreak, "placeTag", value.placeTag);
   assignOptionalText(pendingBreak, "address", value.address);
   assignOptionalNumber(pendingBreak, "batteryLevel", value.batteryLevel);
   return pendingBreak;
@@ -497,11 +507,88 @@ function normalizeMovementEventArray(values, limit) {
   return values.map(normalizeMovementEvent).filter(Boolean).slice(-limit);
 }
 
-function normalizeSampleArray(values, limit) {
+function appendBatteryObservation(state, point, limit) {
+  if (!Number.isFinite(point?.batteryLevel)) {
+    return;
+  }
+  state.batteryObservations.push({
+    timestamp: point.timestamp,
+    batteryLevel: point.batteryLevel,
+  });
+  state.batteryObservations = state.batteryObservations.slice(-limit);
+}
+
+function normalizeBatteryObservationArray(values, limit) {
   if (!Array.isArray(values)) {
     return [];
   }
-  return values.map(normalizeLocationPoint).filter(Boolean).slice(-limit);
+  return values
+    .map(normalizeBatteryObservation)
+    .filter(Boolean)
+    .slice(-limit);
+}
+
+function normalizeBatteryObservation(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const timestamp = normalizeIsoTime(value.timestamp || value.lastSeenAt || value.receivedAt);
+  const batteryLevel = normalizeFiniteNumber(value.batteryLevel);
+  if (!timestamp || batteryLevel == null) {
+    return null;
+  }
+  return { timestamp, batteryLevel };
+}
+
+function normalizeKnownPlaces(values, fallbackRadiusMeters) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  return values
+    .map((value) => normalizeKnownPlace(value, fallbackRadiusMeters))
+    .filter(Boolean);
+}
+
+function normalizeKnownPlace(value, fallbackRadiusMeters) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const tag = normalizeText(value.tag);
+  const latitude = normalizeFiniteNumber(value.latitude ?? value.centerLat);
+  const longitude = normalizeFiniteNumber(value.longitude ?? value.centerLng);
+  if (!tag || latitude == null || longitude == null) {
+    return null;
+  }
+  return {
+    tag,
+    latitude,
+    longitude,
+    radiusMeters: normalizePositiveInt(value.radiusMeters, fallbackRadiusMeters),
+  };
+}
+
+function applyKnownPlaceTag(record, knownPlaces) {
+  if (!record || !Array.isArray(knownPlaces) || !knownPlaces.length) {
+    return record;
+  }
+  const latitude = record.latitude ?? record.centerLat;
+  const longitude = record.longitude ?? record.centerLng;
+  if (normalizeFiniteNumber(latitude) == null || normalizeFiniteNumber(longitude) == null) {
+    return record;
+  }
+  let bestMatch = null;
+  for (const place of knownPlaces) {
+    const distanceMeters = computeDistanceMeters(place.latitude, place.longitude, latitude, longitude);
+    if (distanceMeters <= place.radiusMeters && (!bestMatch || distanceMeters < bestMatch.distanceMeters)) {
+      bestMatch = { place, distanceMeters };
+    }
+  }
+  if (bestMatch) {
+    record.placeTag = bestMatch.place.tag;
+  } else {
+    delete record.placeTag;
+  }
+  return record;
 }
 
 function normalizeIsoTime(value) {

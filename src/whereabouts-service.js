@@ -17,7 +17,9 @@ class WhereaboutsService {
       filePath: this.config.storeFile,
       historyLimit: this.config.historyLimit,
       movementEventLimit: this.config.movementEventLimit,
-      sampleLimit: this.config.sampleLimit,
+      batteryHistoryLimit: this.config.batteryHistoryLimit,
+      knownPlaces: this.config.knownPlaces,
+      knownPlaceRadiusMeters: this.config.knownPlaceRadiusMeters,
       stayMergeRadiusMeters: this.config.stayMergeRadiusMeters,
       stayBreakConfirmRadiusMeters: this.config.stayBreakConfirmRadiusMeters,
       stayBreakConfirmSamples: this.config.stayBreakConfirmSamples,
@@ -42,8 +44,8 @@ class WhereaboutsService {
     return this.store.listRecentMovementEvents(limit);
   }
 
-  listRecentSamples({ limit = 100 } = {}) {
-    return this.store.listRecentSamples(limit);
+  listRecentBatteryObservations({ limit = 100 } = {}) {
+    return this.store.listRecentBatteryObservations(limit);
   }
 
   getSnapshot({ stayLimit = 5, moveLimit = 5 } = {}) {
@@ -87,7 +89,9 @@ class WhereaboutsService {
     const recentMovementEvents = this.listRecentMovementEvents({
       limit: this.config.movementEventLimit || 100,
     });
-    const recentSamples = this.listRecentSamples({ limit: this.config.sampleLimit || 1000 });
+    const recentBatteryObservations = this.listRecentBatteryObservations({
+      limit: this.config.batteryHistoryLimit || 1000,
+    });
     const staysInRange = [currentStay, ...recentStays]
       .filter(Boolean)
       .filter((stay) => recordOverlapsWindow(stay, rangeStart, rangeEnd));
@@ -95,8 +99,8 @@ class WhereaboutsService {
       const movedAt = Date.parse(event.movedAt || "");
       return Number.isFinite(movedAt) && movedAt >= rangeStart.getTime() && movedAt <= rangeEnd.getTime();
     });
-    const samplesInRange = recentSamples.filter((sample) => {
-      const timestamp = Date.parse(sample.timestamp || "");
+    const batteryObservationsInRange = recentBatteryObservations.filter((observation) => {
+      const timestamp = Date.parse(observation.timestamp || "");
       return Number.isFinite(timestamp) && timestamp >= rangeStart.getTime() && timestamp <= rangeEnd.getTime();
     });
 
@@ -132,14 +136,14 @@ class WhereaboutsService {
         ? Math.max(...movesInRange.map((event) => event.distanceMeters || 0))
         : 0,
       lastMove: movesInRange[0] ? serializeLocationRecordForOutput(movesInRange[0], displayTimeZone) : null,
-      batteryTrend: buildBatteryTrend(samplesInRange, staysInRange, displayTimeZone),
+      batteryTrend: buildBatteryTrend(batteryObservationsInRange, staysInRange, displayTimeZone),
       dataCoverage: {
-        sampleCount: samplesInRange.length,
+        batteryObservationCount: batteryObservationsInRange.length,
         stayCount: staysInRange.length,
         moveCount: movesInRange.length,
-        note: samplesInRange.length
-          ? "Battery trend is based on retained raw samples in this range."
-          : "No retained raw samples in this range; old stores only have aggregated stays.",
+        note: batteryObservationsInRange.length
+          ? "Battery trend is based on retained battery observations in this range."
+          : "No retained battery observations in this range; old stores only have aggregated stays.",
       },
     };
   }
@@ -274,8 +278,7 @@ function buildKnownPlaces(stays, rangeStart, rangeEnd, displayTimeZone) {
   for (const stay of stays) {
     const key = buildPlaceKey(stay);
     const existing = grouped.get(key) || {
-      placeId: stay.placeId || undefined,
-      placeLabel: stay.placeLabel || undefined,
+      placeTag: stay.placeTag || undefined,
       address: stay.address || undefined,
       centerLat: stay.centerLat,
       centerLng: stay.centerLng,
@@ -303,7 +306,7 @@ function buildKnownPlaces(stays, rangeStart, rangeEnd, displayTimeZone) {
 }
 
 function buildPlaceKey(stay) {
-  const explicit = normalizeText(stay.placeId) || normalizeText(stay.placeLabel) || normalizeText(stay.address);
+  const explicit = normalizeText(stay.placeTag);
   if (explicit) {
     return explicit.toLowerCase();
   }
@@ -315,13 +318,13 @@ function buildPlaceKey(stay) {
   return "unknown";
 }
 
-function buildBatteryTrend(samples, stays, displayTimeZone) {
-  const batteryRecords = samples
-    .filter((sample) => Number.isFinite(sample.batteryLevel))
-    .map((sample) => ({
-      level: sample.batteryLevel,
-      percent: normalizeBatteryPercent(sample.batteryLevel),
-      timestamp: sample.timestamp,
+function buildBatteryTrend(observations, stays, displayTimeZone) {
+  const batteryRecords = observations
+    .filter((observation) => Number.isFinite(observation.batteryLevel))
+    .map((observation) => ({
+      level: observation.batteryLevel,
+      percent: normalizeBatteryPercent(observation.batteryLevel),
+      timestamp: observation.timestamp,
     }))
     .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
   if (!batteryRecords.length) {
@@ -335,7 +338,7 @@ function buildBatteryTrend(samples, stays, displayTimeZone) {
       .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
     return buildBatteryTrendFromRecords(stayRecords, displayTimeZone, "aggregated_stays");
   }
-  return buildBatteryTrendFromRecords(batteryRecords, displayTimeZone, "raw_samples");
+  return buildBatteryTrendFromRecords(batteryRecords, displayTimeZone, "battery_observations");
 }
 
 function buildBatteryTrendFromRecords(records, displayTimeZone, source) {
@@ -388,8 +391,7 @@ function buildMobilityState(currentStay, pendingBreak, displayTimeZone) {
       lastSeenAtLocal: formatDisplayTime(pendingBreak.lastSeenAt, displayTimeZone),
       sampleCount: pendingBreak.sampleCount,
       address: pendingBreak.address,
-      placeId: pendingBreak.placeId,
-      placeLabel: pendingBreak.placeLabel,
+      placeTag: pendingBreak.placeTag,
       note: "A sample outside the current stay is waiting for confirmation.",
     };
   }
@@ -401,8 +403,7 @@ function buildMobilityState(currentStay, pendingBreak, displayTimeZone) {
       durationMs: computeRecordDurationMs(currentStay),
       durationText: formatDuration(computeRecordDurationMs(currentStay)),
       address: currentStay.address,
-      placeId: currentStay.placeId,
-      placeLabel: currentStay.placeLabel,
+      placeTag: currentStay.placeTag,
     };
   }
   return {

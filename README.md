@@ -31,7 +31,11 @@ WHEREABOUTS_PORT
 WHEREABOUTS_TOKEN
 WHEREABOUTS_HISTORY_LIMIT
 WHEREABOUTS_MOVEMENT_EVENT_LIMIT
-WHEREABOUTS_SAMPLE_LIMIT
+WHEREABOUTS_BATTERY_HISTORY_LIMIT
+WHEREABOUTS_KNOWN_PLACES
+WHEREABOUTS_HOME_CENTER
+WHEREABOUTS_WORK_CENTER
+WHEREABOUTS_PLACE_RADIUS_METERS
 WHEREABOUTS_STAY_MERGE_RADIUS_METERS
 WHEREABOUTS_STAY_BREAK_RADIUS_METERS
 WHEREABOUTS_STAY_BREAK_SAMPLES
@@ -59,8 +63,6 @@ GET /healthz
   "source": "shortcuts",
   "deviceName": "iPhone",
   "shortcutName": "Upload Location",
-  "placeId": "home",
-  "placeLabel": "Home",
   "batteryLevel": 0.82,
   "notes": "Optional notes"
 }
@@ -80,10 +82,31 @@ Optional fields:
 - `source`: producer label, defaults to `shortcuts`
 - `deviceName`: reporting device name
 - `shortcutName`: iOS Shortcut name
-- `placeId`: stable normalized place id such as `home` or `work`
-- `placeLabel`: human-friendly normalized place label
 - `batteryLevel`: number
 - `notes`: free-form notes
+
+## Known Place Tagging
+
+Shortcut uploads do not need to provide normalized place names. Configure known
+place centers on the server and whereabouts will add `placeTag` automatically
+when a stay center falls within the configured radius.
+
+Simple center envs:
+
+```bash
+WHEREABOUTS_HOME_CENTER=22.63944177344174,114.00687423407666
+WHEREABOUTS_WORK_CENTER=22.000000,114.000000
+WHEREABOUTS_PLACE_RADIUS_METERS=150
+```
+
+Or put JSON in `WHEREABOUTS_KNOWN_PLACES` for more places:
+
+```json
+[
+  { "tag": "home", "latitude": 22.63944177344174, "longitude": 114.00687423407666, "radiusMeters": 150 },
+  { "tag": "work", "latitude": 22.0, "longitude": 114.0, "radiusMeters": 150 }
+]
+```
 
 Successful response:
 
@@ -106,6 +129,8 @@ Successful response:
 
 `whereabouts_current_stay`, `whereabouts_recent_stays`, and `whereabouts_snapshot`
 include `durationMs`, `durationMinutes`, and `durationText` for stay records.
+These duration fields are computed output fields; they are not written back into
+the raw `locations.json` store.
 
 `whereabouts_summary` accepts:
 

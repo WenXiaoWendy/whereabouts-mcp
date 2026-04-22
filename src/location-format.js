@@ -11,8 +11,8 @@ function printLocationRecord(record, displayTimeZone = resolveDisplayTimeZone())
   if (record.address) {
     console.log(`address: ${record.address}`);
   }
-  if (record.placeLabel || record.placeId) {
-    console.log(`place: ${record.placeLabel || record.placeId}`);
+  if (record.placeTag) {
+    console.log(`place: ${record.placeTag}`);
   }
   if (record.sampleCount != null) {
     console.log(`samples: ${record.sampleCount}`);
