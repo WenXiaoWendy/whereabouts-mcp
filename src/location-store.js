@@ -276,6 +276,7 @@ function normalizeLocationPoint(value) {
   assignOptionalText(point, "shortcutName", value.shortcutName);
   assignOptionalText(point, "address", value.address);
   assignOptionalText(point, "notes", value.notes);
+  assignOptionalText(point, "weather", value.weather);
   return point;
 }
 
@@ -333,6 +334,7 @@ function createPendingBreak(point) {
     shortcutName: point.shortcutName,
     placeTag: point.placeTag,
     address: point.address,
+    weather: point.weather,
     batteryLevel: point.batteryLevel,
   };
 }
@@ -400,6 +402,7 @@ function applyPointMetadata(target, point) {
   assignOptionalText(target, "shortcutName", point.shortcutName);
   assignOptionalText(target, "placeTag", point.placeTag);
   assignOptionalText(target, "address", point.address);
+  assignOptionalText(target, "weather", point.weather);
   assignOptionalNumber(target, "batteryLevel", point.batteryLevel);
 }
 
